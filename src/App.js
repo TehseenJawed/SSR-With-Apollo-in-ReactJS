@@ -9,9 +9,7 @@ import './App.css';
 function App() {
 
   return (
-    <ApolloProvider client={client}>
-      <Home />
-    </ApolloProvider>
+   <div>I am working</div>
   );
 }
 
