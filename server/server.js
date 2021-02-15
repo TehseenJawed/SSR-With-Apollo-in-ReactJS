@@ -30,16 +30,15 @@
 import React from 'react'
 import ReactDOMServer from 'react-dom/server'
 import { ApolloProvider } from '@apollo/react-common';
+import 'cross-fetch/polyfill';
 import { ApolloClient } from 'apollo-client';
 import { createHttpLink } from 'apollo-link-http';
 import Express from 'express';
 import { StaticRouter } from 'react-router';
 import { InMemoryCache } from "apollo-cache-inmemory";
-import { getDataFromTree, renderToStringWithData } from "@apollo/react-ssr";
+import { renderToStringWithData } from "@apollo/react-ssr";
 import Layout from './routes/Layout';
 import fetch from 'node-fetch'
-import AppContainer from '../src/App'
-import { SchemaLink } from '@apollo/client/link/schema';
 // import { makeExecutableSchema, addMockFunctionsToSchema } from 'graphql-tools';
 
 
@@ -48,87 +47,71 @@ import { SchemaLink } from '@apollo/client/link/schema';
 const basePort = 8000
 const app = new Express();
 
-// const typeDefs = `
-// query {
-//     students{
-//       name
-//     }
-//   }
-// `;
 
-// const mocks = {
-//     Query: () => true,
-//     Mutation: () => true
-//   };
-  
-//   const schema = makeExecutableSchema({ typeDefs });
-//   const schemaWithMocks = addMockFunctionsToSchema({
-//     schema,
-//     mocks
-//   });
-  
-//   const apolloCache = new InMemoryCache(window.__APOLLO_STATE__);
 
 app.use((req, res) => {
-    const link = createHttpLink({ uri: '/graphql', fetch: fetch });
-    const client = new ApolloClient({
-        ssrMode: true,
-        // fetch,
-        // Remember that this is the interface the SSR server will use to connect to the
-        // API server, so we need to ensure it isn't firewalled, etc
+  const link = createHttpLink({ uri: '/graphql', fetch: fetch });
+  const client = new ApolloClient({
+    ssrMode: true,
+    // fetch,
+    
+    link: createHttpLink({
+      uri: 'http://localhost:4000',
+      fetch,
+      credentials: 'same-origin',
+      headers: {
+        cookie: req.header('Cookie'),
+      },
+    }),
+    cache: new InMemoryCache(),
+  });
 
-        // link: new SchemaLink({ schema }),
-        // cache: new InMemoryCache(),
-        link: createHttpLink({
-          uri: 'http://localhost:4000',
-          fetch,
-          credentials: 'same-origin',
-          headers: {
-            cookie: req.header('Cookie'),
-          },
-        }),
-        cache: new InMemoryCache(),
-    });
+  const context = {};
 
-    const context = {};
-
-    const App = (
-        <ApolloProvider client={client}>
-            <StaticRouter location={req.url} context={context}>
-                <Layout />
-            </StaticRouter>
-        </ApolloProvider>
+  const App = (
+    <ApolloProvider client={client}>
+      <StaticRouter location={req.url} context={context}>
+        <Layout />
+      </StaticRouter>
+    </ApolloProvider>
+  );
+  function Html({ content, state }) {
+    return (
+      <html>
+        <body>
+          <div id="root" dangerouslySetInnerHTML={{ __html: content }} />
+          <script dangerouslySetInnerHTML={{
+            __html: `window.__APOLLO_STATE__=${JSON.stringify(state).replace(/</g, '\\u003c')};`,
+          }} />
+        </body>
+      </html>
     );
+  }
 
-      getDataFromTree(App).then(() => {
-        // We are ready to render for real
-        const content = ReactDOM.renderToString(App);
-        const initialState = client.extract();
+  // getDataFromTree(App).then(() => {
+  //   // We are ready to render for real
+  //   const content = ReactDOM.renderToString(App);
+  //   const initialState = client.extract();
 
-        const html = <Html content={content} state={initialState} />;
+  //   const html = <Html content={content} state={initialState} />;
 
-        res.status(200);
-        res.send(`<!doctype html>\n${ReactDOM.renderToStaticMarkup(html)}`);
-        res.end();
-      });
+  //   res.status(200);
+  //   res.send(`<!doctype html>\n${ReactDOM.renderToStaticMarkup(html)}`);
+  //   res.end();
+  // });
 
-    // renderToStringWithData(App).then((content) => {
-    //     const initialState = client.extract();
-    //     const html = <Html content={content} state={initialState} />;
+  renderToStringWithData(App).then((content) => {
+    const initialState = client.extract();
+    const html = <Html content={content} state={initialState} />;
 
-    //     res.status(200);
-    //     res.send(`<!doctype html>\n${ReactDOMServer.renderToStaticMarkup(html)}`);
-    //     res.end();
-    // });
-
-
-
-    // The client-side App will instead use <BrowserRouter>
+    res.status(200);
+    res.send(`<!doctype html>\n${ReactDOMServer.renderToStaticMarkup(html)}`);
+    res.end();
+  });
 
 
-    // rendering code (see below)
 });
 
 app.listen(basePort, () => console.log( // eslint-disable-line no-console
-    `app Server is now running on http://localhost:${basePort}`
+  `app Server is now running on http://localhost:${basePort}`
 ));
